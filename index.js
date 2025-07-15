@@ -4,6 +4,7 @@ const P = require('pino');
 const express = require('./keepalive');
 const config = require('./config');
 
+const { default: makeWASocket, useSingleFileAuthState } = require('@whiskeysockets/baileys');
 const { state, saveState } = useSingleFileAuthState('./session/auth_info.json');
 
 async function startBot() {
