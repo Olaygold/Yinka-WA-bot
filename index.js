@@ -2,32 +2,34 @@ const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = requ
 const { Boom } = require('@hapi/boom');
 const fs = require('fs');
 
-// Load authentication state
 const { state, saveState } = useSingleFileAuthState('./auth_info.json');
 
-// Create the socket
 async function startSock() {
     const sock = makeWASocket({
         auth: state,
         printQRInTerminal: true,
     });
 
-    // Listen for connection updates
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
+
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect);
-            if (shouldReconnect) startSock();
+            const error = lastDisconnect?.error;
+            const statusCode = error instanceof Boom ? error.output.statusCode : null;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+            console.log('❌ Connection closed:', statusCode, ', reconnecting:', shouldReconnect);
+
+            if (shouldReconnect) {
+                startSock();
+            }
         } else if (connection === 'open') {
             console.log('✅ Bot connected successfully!');
         }
     });
 
-    // Save auth credentials every time they update
     sock.ev.on('creds.update', saveState);
 
-    // Respond to incoming messages
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
@@ -51,5 +53,4 @@ async function startSock() {
     });
 }
 
-// Start the bot
 startSock();
