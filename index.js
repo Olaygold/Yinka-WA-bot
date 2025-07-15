@@ -1,11 +1,12 @@
-const { default: makeWASocket, useSingleFileAuthState } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
-const P = require('pino');
-const express = require('./keepalive');
-const config = require('./config');
+const express = require("express");
+const { default: makeWASocket, useSingleFileAuthState } = require("@whiskeysockets/baileys");
+const { Boom } = require("@hapi/boom");
+const fs = require("fs");
+const P = require("pino");
+const { Configuration, OpenAIApi } = require("openai");
 
-const { default: makeWASocket, useSingleFileAuthState } = require('@whiskeysockets/baileys');
-const { state, saveState } = useSingleFileAuthState('./session/auth_info.json');
+const { state, saveState } = useSingleFileAuthState("./session/auth_info.json");
+
 
 async function startBot() {
     const sock = makeWASocket({
