@@ -1,66 +1,55 @@
-const express = require("express");
-const { default: makeWASocket, useSingleFileAuthState } = require("@whiskeysockets/baileys");
-const { Boom } = require("@hapi/boom");
-const fs = require("fs");
-const P = require("pino");
-const { Configuration, OpenAIApi } = require("openai");
+const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const fs = require('fs');
 
-// Load session state
-const { state, saveState } = useSingleFileAuthState("./session/auth_info.json");
+// Load authentication state
+const { state, saveState } = useSingleFileAuthState('./auth_info.json');
 
-// Setup OpenAI (ChatGPT) — replace with your actual API key
-const configuration = new Configuration({
-  apiKey: "sk-xxx_your_free_key_here",
-});
-const openai = new OpenAIApi(configuration);
+// Create the socket
+async function startSock() {
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+    });
 
-// Start Express server (needed for Render to keep bot alive)
-const app = express();
-const PORT = process.env.PORT || 3000;
+    // Listen for connection updates
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('connection closed due to', lastDisconnect?.error, ', reconnecting:', shouldReconnect);
+            if (shouldReconnect) startSock();
+        } else if (connection === 'open') {
+            console.log('✅ Bot connected successfully!');
+        }
+    });
 
-app.get("/", (req, res) => {
-  res.send("🤖 Yinka WhatsApp Bot is running!");
-});
+    // Save auth credentials every time they update
+    sock.ev.on('creds.update', saveState);
 
-app.listen(PORT, () => {
-  console.log(`✅ Server is running on http://localhost:${PORT}`);
-});
+    // Respond to incoming messages
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
-// Start WhatsApp bot
-async function startBot() {
-  const sock = makeWASocket({
-    logger: P({ level: "silent" }),
-    printQRInTerminal: true,
-    auth: state,
-  });
+        const from = msg.key.remoteJid;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
-  sock.ev.on("creds.update", saveState);
+        if (!text) return;
 
-  sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
+        console.log(`📩 Message from ${from}: ${text}`);
 
-    const sender = msg.key.remoteJid;
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-
-    if (!text) return;
-
-    console.log("📩 Message from", sender, ":", text);
-
-    // Reply with GPT response
-    try {
-      const response = await openai.createChatCompletion({
-        model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: text }],
-      });
-
-      const reply = response.data.choices[0].message.content;
-      await sock.sendMessage(sender, { text: reply });
-    } catch (err) {
-      console.error("❌ OpenAI Error:", err.message);
-      await sock.sendMessage(sender, { text: "❌ GPT error. Try again later." });
-    }
-  });
+        if (text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello') {
+            await sock.sendMessage(from, { text: 'Hello! 👋 I am your bot. Type "help" to see what I can do.' });
+        } else if (text.toLowerCase() === 'help') {
+            await sock.sendMessage(from, {
+                text: '🤖 Available commands:\n\n- `hi` / `hello`: Greet the bot\n- `help`: Show this help message',
+            });
+        } else {
+            await sock.sendMessage(from, { text: `❓ I don't understand "${text}". Type "help" to see available commands.` });
+        }
+    });
 }
 
-startBot();
+// Start the bot
+startSock();
