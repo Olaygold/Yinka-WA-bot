@@ -1,9 +1,15 @@
-const fs = require('fs');
-const path = require('path');
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
-const qrcode = require('qrcode-terminal');     // For terminal display
-const QRCode = require('qrcode');              // For image saving
+const qrcode = require('qrcode-terminal');
+const fs = require('fs');
+const path = require('path');
+const qrcodeImage = require('qrcode');
+
+// 📁 Ensure QR folder exists
+const qrFolder = path.join(__dirname, 'qrcodes');
+if (!fs.existsSync(qrFolder)) {
+    fs.mkdirSync(qrFolder);
+}
 
 async function startSock() {
     const { state, saveCreds } = await useMultiFileAuthState('./auth');
@@ -15,27 +21,14 @@ async function startSock() {
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        // If QR code is generated, show and save it
         if (qr) {
-            console.log('📲 Scan the QR below to log in:\n');
-            qrcode.generate(qr, { small: true }); // Show in terminal
+            console.log('📲 Scan the QR below to log in:');
+            qrcode.generate(qr, { small: true });
 
-            const qrDir = path.join(__dirname, 'qrcodes');
-            if (!fs.existsSync(qrDir)) fs.mkdirSync(qrDir); // Make folder if not exist
-
-            const filePath = path.join(qrDir, 'qr.png');
-            try {
-                await QRCode.toFile(filePath, qr, {
-                    color: {
-                        dark: '#000000',
-                        light: '#ffffff',
-                    },
-                    width: 300,
-                });
-                console.log(`🖼️ QR Code saved to ${filePath}`);
-            } catch (err) {
-                console.error('❌ Failed to save QR code image:', err);
-            }
+            // 🖼️ Save QR to file
+            const filePath = path.join(qrFolder, 'qr.png');
+            await qrcodeImage.toFile(filePath, qr);
+            console.log(`✅ QR Code saved to ${filePath}`);
         }
 
         const error = lastDisconnect?.error;
@@ -79,3 +72,19 @@ async function startSock() {
 }
 
 startSock();
+
+
+// ✅ ADD THIS PART BELOW YOUR EXISTING CODE
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use('/qrcodes', express.static('qrcodes'));
+
+app.get('/', (req, res) => {
+  res.send('<h2>🖼️ <a href="/qrcodes/qr.png">Click here to view QR Code</a></h2>');
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 QR code viewer running at http://localhost:${PORT}`);
+});
