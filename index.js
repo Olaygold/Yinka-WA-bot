@@ -1,67 +1,64 @@
-const { default: makeWASocket, useSingleFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
-const qrcode = require('qrcode');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
 const fs = require('fs');
-const express = require('express');
-
-const { state, saveState } = useSingleFileAuthState('./auth_info.json');
+const qrcode = require('qrcode-terminal'); // or use 'qrcode' for image saving
 
 async function startSock() {
+    const { state, saveCreds } = await useMultiFileAuthState('./auth');
+
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false, // 🔕 disables deprecated terminal QR
-        browser: ['Ubuntu', 'Chrome', '22.04.4']
+        // printQRInTerminal: true, // now we handle QR ourselves
     });
 
-    // ✅ Save session credentials on update
-    sock.ev.on('creds.update', saveState);
-
-    // ✅ Listen for connection events
-    sock.ev.on('connection.update', async (update) => {
+    sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        // 🧾 Save QR to file if available
         if (qr) {
-            console.log("📸 QR code received, saving to qr.png...");
-            await qrcode.toFile('./qr.png', qr);
+            qrcode.generate(qr, { small: true }); // show QR in terminal
+
+            // Optional: Save to image file
+            // const QRCode = require('qrcode');
+            // QRCode.toFile('./qr.png', qr, { width: 300 }, (err) => {
+            //     if (err) console.error('❌ Failed to save QR image');
+            //     else console.log('🖼️ QR Code saved to qr.png');
+            // });
         }
 
-        // 🔌 Reconnect if disconnected unintentionally
+        const error = lastDisconnect?.error;
+        const statusCode = error instanceof Boom ? error.output?.statusCode : null;
+
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log("❌ Connection closed. Reconnecting?", shouldReconnect);
-            if (shouldReconnect) startSock();
+            console.log('❌ Connection closed. Code:', statusCode);
+            if (statusCode !== DisconnectReason.loggedOut) {
+                startSock();
+            } else {
+                console.log('🔒 Logged out. Delete auth and scan again.');
+            }
         } else if (connection === 'open') {
-            console.log("✅ Connected to WhatsApp!");
+            console.log('✅ Connected to WhatsApp!');
         }
     });
 
-    // ✅ Example message handler
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type === 'notify') {
-            const msg = messages[0];
-            const from = msg.key.remoteJid;
-            const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+    sock.ev.on('creds.update', saveCreds);
 
-            if (text === '!ping') {
-                await sock.sendMessage(from, { text: '🏓 Pong!' });
-            }
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
-            if (text === '!hi') {
-                await sock.sendMessage(from, { text: '👋 Hello from your Render-hosted bot!' });
-            }
+        const from = msg.key.remoteJid;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+        console.log(`📨 Message from ${from}: ${text}`);
+
+        if (text?.toLowerCase() === 'hi') {
+            await sock.sendMessage(from, { text: '👋 Hello! Welcome to Yinka Bot!' });
+        } else if (text?.toLowerCase() === 'help') {
+            await sock.sendMessage(from, { text: '🛠 Available commands:\n- hi\n- help' });
+        } else {
+            await sock.sendMessage(from, { text: `❓ Unrecognized command: "${text}"` });
         }
     });
 }
 
-// 🧠 Start socket
 startSock();
-
-// 🌍 Serve QR image via Express
-const app = express();
-app.use(express.static('.')); // serves qr.png
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🌐 Web server running on http://localhost:${PORT} (or Render public URL)`);
-    console.log(`➡️ Visit /qr.png to scan the code`);
-});
