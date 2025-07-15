@@ -5,37 +5,62 @@ const fs = require("fs");
 const P = require("pino");
 const { Configuration, OpenAIApi } = require("openai");
 
+// Load session state
 const { state, saveState } = useSingleFileAuthState("./session/auth_info.json");
 
+// Setup OpenAI (ChatGPT) — replace with your actual API key
+const configuration = new Configuration({
+  apiKey: "sk-xxx_your_free_key_here",
+});
+const openai = new OpenAIApi(configuration);
 
+// Start Express server (needed for Render to keep bot alive)
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.send("🤖 Yinka WhatsApp Bot is running!");
+});
+
+app.listen(PORT, () => {
+  console.log(`✅ Server is running on http://localhost:${PORT}`);
+});
+
+// Start WhatsApp bot
 async function startBot() {
-    const sock = makeWASocket({
-        logger: P({ level: 'silent' }),
-        printQRInTerminal: true,
-        auth: state,
-    });
+  const sock = makeWASocket({
+    logger: P({ level: "silent" }),
+    printQRInTerminal: true,
+    auth: state,
+  });
 
-    sock.ev.on('creds.update', saveState);
+  sock.ev.on("creds.update", saveState);
 
-    sock.ev.on('messages.upsert', async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message || msg.key.fromMe) return;
+  sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    const msg = messages[0];
+    if (!msg.message || msg.key.fromMe) return;
 
-        const body = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
-        const sender = msg.key.remoteJid;
+    const sender = msg.key.remoteJid;
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
 
-        if (body.startsWith(config.prefix)) {
-            const cmd = body.slice(config.prefix.length).trim().split(' ')[0];
-            const args = body.slice(config.prefix.length + cmd.length).trim();
+    if (!text) return;
 
-            try {
-                const command = require(`./commands/${cmd}`);
-                command.run(sock, msg, args);
-            } catch {
-                await sock.sendMessage(sender, { text: "❌ Unknown command. Try .menu" });
-            }
-        }
-    });
+    console.log("📩 Message from", sender, ":", text);
+
+    // Reply with GPT response
+    try {
+      const response = await openai.createChatCompletion({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: text }],
+      });
+
+      const reply = response.data.choices[0].message.content;
+      await sock.sendMessage(sender, { text: reply });
+    } catch (err) {
+      console.error("❌ OpenAI Error:", err.message);
+      await sock.sendMessage(sender, { text: "❌ GPT error. Try again later." });
+    }
+  });
 }
 
 startBot();
