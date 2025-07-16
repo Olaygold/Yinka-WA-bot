@@ -90,8 +90,7 @@ We share opportunities, updates, and growth tips.
                 .filter(([id, lastSeen]) => (Date.now() - lastSeen) > days * 24 * 60 * 60 * 1000)
                 .map(([id]) => id);
             return reply(`🙈 Users inactive for ${days} days:
-${inactiveUsers.join("
-") || "None"}`);
+let result = `${inactiveUsers.join("\n")}`; || "None"}`);
         }
 
         if (text === "!ping") {
