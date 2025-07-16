@@ -123,9 +123,7 @@ We share opportunities, updates, and growth tips.
             const shuffled = giveawayParticipants.sort(() => 0.5 - Math.random());
             const winners = shuffled.slice(0, giveawayWinnersCount);
             giveawayActive = false;
-            return reply(`🎊 Winners:
-${winners.join("
-")}`);
+          return reply(`🏆 Winners List:\n${winners.join("\n")}`);  
         }
 
         if (text === "!giveaway") {
