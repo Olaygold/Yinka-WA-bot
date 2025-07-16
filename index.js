@@ -63,10 +63,10 @@ async function startSock() {
 - !giveaway: Participate in giveaway`);
                 break;
             case "rules":
-                reply("📜 Group Rules:
+                reply(`📜 Group Rules:
 1. Be respectful
 2. No spam
-3. Stay on topic");
+3. Stay on topic`);
                 break;
             case "!giveaway":
                 reply("🎁 You've been entered into the giveaway!");
