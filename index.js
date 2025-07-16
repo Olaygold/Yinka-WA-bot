@@ -21,9 +21,20 @@ async function startSock() {
     let giveawayActive = false;
     let giveawayWinnersCount = 1;
     let giveawayParticipants = [];
-    let welcomeMessage = "👋 Welcome to our investment group. We share opportunities, updates, and growth tips.
-📈 Take risks wisely. Stay motivated and invest smartly.
-💬 Reach out to the admin if you need help.";
+    
+
+
+let welcomeMessage = `👋 Welcome to our investment group.
+
+We share opportunities, updates, and growth tips.
+
+💼 You can earn, grow, and connect with like-minded investors.
+
+📢 Stay tuned for updates and participate in giveaways!
+
+📩 Need help or want to invest? Contact admin @yinka_invests or reply "!help"`;
+
+  
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
