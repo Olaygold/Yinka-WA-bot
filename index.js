@@ -89,10 +89,9 @@ We share opportunities, updates, and growth tips.
             const inactiveUsers = Object.entries(userLastSeen)
                 .filter(([id, lastSeen]) => (Date.now() - lastSeen) > days * 24 * 60 * 60 * 1000)
                 .map(([id]) => id);
-            return reply(`🙈 Users inactive for ${days} days:
-let result = `${inactiveUsers.join("\n")}`; || "None"}`);
-        }
+            return reply(`🙈 Users inactive for ${days} days:\n${inactiveUsers.join("\n")}`);
 
+          
         if (text === "!ping") {
             return reply("🏓 Pong! Bot is active.");
         }
